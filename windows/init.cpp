@@ -73,7 +73,54 @@ const char *uiInit(uiInitOptions *o)
 	if ((si.dwFlags & STARTF_USESHOWWINDOW) != 0)
 		nCmdShow = si.wShowWindow;
 
-	// LONGTERM set DPI awareness
+	// set DPI awareness so the process renders crisp on HiDPI displays
+	// instead of being DWM bitmap-stretched (issues #294 / #184).
+	// the modern APIs are not in the Vista-era SDK headers and may be
+	// absent on older systems, so resolve them dynamically and fall back.
+	// this must run before any window or device context is created;
+	// if the host process already set awareness, the calls are no-ops.
+	{
+		HMODULE user32 = LoadLibraryW(L"user32.dll");
+		BOOL awarenessSet = FALSE;
+
+		if (user32 != NULL) {
+			// Windows 10 1703+: per-monitor-aware v2.
+			// DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 == (HANDLE) -4
+			typedef BOOL (WINAPI *setProcessDpiAwarenessContextT)(HANDLE);
+			setProcessDpiAwarenessContextT pSetProcessDpiAwarenessContext =
+				(setProcessDpiAwarenessContextT) GetProcAddress(user32, "SetProcessDpiAwarenessContext");
+			if (pSetProcessDpiAwarenessContext != NULL)
+				if (pSetProcessDpiAwarenessContext((HANDLE) -4))
+					awarenessSet = TRUE;
+		}
+
+		if (!awarenessSet) {
+			// Windows 8.1+: per-monitor DPI awareness (shcore.dll).
+			// PROCESS_PER_MONITOR_DPI_AWARE == 2
+			HMODULE shcore = LoadLibraryW(L"shcore.dll");
+			if (shcore != NULL) {
+				typedef HRESULT (WINAPI *setProcessDpiAwarenessT)(int);
+				setProcessDpiAwarenessT pSetProcessDpiAwareness =
+					(setProcessDpiAwarenessT) GetProcAddress(shcore, "SetProcessDpiAwareness");
+				if (pSetProcessDpiAwareness != NULL)
+					if (SUCCEEDED(pSetProcessDpiAwareness(2)))
+						awarenessSet = TRUE;
+				FreeLibrary(shcore);
+			}
+		}
+
+		if (!awarenessSet && user32 != NULL) {
+			// Vista+: system DPI awareness.
+			typedef BOOL (WINAPI *setProcessDPIAwareT)(void);
+			setProcessDPIAwareT pSetProcessDPIAware =
+				(setProcessDPIAwareT) GetProcAddress(user32, "SetProcessDPIAware");
+			if (pSetProcessDPIAware != NULL)
+				pSetProcessDPIAware();
+		}
+
+		if (user32 != NULL)
+			FreeLibrary(user32);
+	}
 
 	hDefaultIcon = LoadIconW(NULL, IDI_APPLICATION);
 	if (hDefaultIcon == NULL)
