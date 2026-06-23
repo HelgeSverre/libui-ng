@@ -13,6 +13,9 @@ struct uiWindow {
 	int margined;
 	int resizeable;
 	int keepAbove;
+	uiControl *titlebar;
+	uiWindowCornerStyle cornerStyle;
+	int shadow;
 	BOOL hasMenubar;
 	BOOL changingSize;
 	int fullscreen;
@@ -69,6 +72,55 @@ static void windowRelayout(uiWindow *w)
 	height -= 2 * my;
 	child = (HWND) uiControlHandle(w->child);
 	uiWindowsEnsureMoveWindowDuringResize(child, x, y, width, height);
+}
+
+// Custom-chrome hit-testing for borderless windows: resize edges/corners when
+// resizable, drag (HTCAPTION) over the designated titlebar control's empty area
+// (nested interactive controls keep their clicks). Returns HTNOWHERE to defer.
+#define uiprivChromeGrip 6
+static LRESULT windowNCHitTest(uiWindow *w, int sx, int sy)
+{
+	RECT wr;
+	BOOL left, right, top, bottom;
+
+	if (!w->borderless)
+		return HTNOWHERE;
+	GetWindowRect(w->hwnd, &wr);
+	if (w->resizeable) {
+		left = sx < wr.left + uiprivChromeGrip;
+		right = sx >= wr.right - uiprivChromeGrip;
+		top = sy < wr.top + uiprivChromeGrip;
+		bottom = sy >= wr.bottom - uiprivChromeGrip;
+		if (top && left) return HTTOPLEFT;
+		if (top && right) return HTTOPRIGHT;
+		if (bottom && left) return HTBOTTOMLEFT;
+		if (bottom && right) return HTBOTTOMRIGHT;
+		if (left) return HTLEFT;
+		if (right) return HTRIGHT;
+		if (top) return HTTOP;
+		if (bottom) return HTBOTTOM;
+	}
+	if (w->titlebar != NULL) {
+		HWND tb = (HWND) uiControlHandle(w->titlebar);
+		RECT tr;
+		POINT pt;
+
+		GetWindowRect(tb, &tr);
+		pt.x = sx;
+		pt.y = sy;
+		if (PtInRect(&tr, pt)) {
+			POINT cpt = pt;
+			HWND child;
+
+			ScreenToClient(tb, &cpt);
+			child = RealChildWindowFromPoint(tb, cpt);
+			// no nested control under the cursor -> draggable caption area
+			if (child == NULL || child == tb)
+				return HTCAPTION;
+			return HTCLIENT;	// a control occupies this point; let it click
+		}
+	}
+	return HTNOWHERE;
 }
 
 static LRESULT CALLBACK windowWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -134,6 +186,14 @@ static LRESULT CALLBACK windowWndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARA
 		if ((*(w->onClosing))(w, w->onClosingData))
 			uiControlDestroy(uiControl(w));
 		return 0;		// we destroyed it already
+	case WM_NCHITTEST:
+	{
+		// lParam carries screen coordinates (signed)
+		LRESULT ht = windowNCHitTest(w, (int) (short) LOWORD(lParam), (int) (short) HIWORD(lParam));
+		if (ht != HTNOWHERE)
+			return ht;
+		break;	// defer to DefWindowProc
+	}
 	}
 	return DefWindowProcW(hwnd, uMsg, wParam, lParam);
 }
@@ -513,6 +573,73 @@ void uiWindowSetKeepAbove(uiWindow *w, int keepAbove)
 	}
 }
 
+// custom-chrome support. DWM entry points are resolved dynamically so the build
+// keeps compiling against the Vista-era SDK target and stays loadable on older
+// Windows (corner rounding is a no-op before Windows 11). See ui.h.
+typedef HRESULT (WINAPI *DwmSetWindowAttribute_t)(HWND, DWORD, LPCVOID, DWORD);
+typedef HRESULT (WINAPI *DwmExtendFrameIntoClientArea_t)(HWND, const void *);
+
+void uiWindowSetTitlebar(uiWindow *w, uiControl *titlebar)
+{
+	// The drag handle is honored by WM_NCHITTEST (windowNCHitTest); just record it.
+	w->titlebar = titlebar;
+}
+
+uiWindowCornerStyle uiWindowGetCornerStyle(uiWindow *w)
+{
+	return w->cornerStyle;
+}
+
+void uiWindowSetCornerStyle(uiWindow *w, uiWindowCornerStyle style)
+{
+	HMODULE dwm;
+	DwmSetWindowAttribute_t fn;
+
+	w->cornerStyle = style;
+	dwm = LoadLibraryW(L"dwmapi.dll");
+	if (dwm == NULL)
+		return;
+	fn = (DwmSetWindowAttribute_t) GetProcAddress(dwm, "DwmSetWindowAttribute");
+	if (fn != NULL) {
+		// DWMWA_WINDOW_CORNER_PREFERENCE = 33; DONOTROUND=1, ROUND=2, ROUNDSMALL=3
+		DWORD pref;
+		switch (style) {
+		case uiWindowCornerStyleRounded: pref = 2; break;
+		case uiWindowCornerStyleRoundedSmall: pref = 3; break;
+		default: pref = 1; break;
+		}
+		fn(w->hwnd, 33, &pref, sizeof (pref));
+	}
+	FreeLibrary(dwm);
+}
+
+int uiWindowShadow(uiWindow *w)
+{
+	return w->shadow;
+}
+
+void uiWindowSetShadow(uiWindow *w, int shadow)
+{
+	HMODULE dwm;
+	DwmExtendFrameIntoClientArea_t fn;
+	// MARGINS layout {cxLeftWidth, cxRightWidth, cyTopHeight, cyBottomHeight}
+	int margins[4];
+
+	w->shadow = shadow;
+	dwm = LoadLibraryW(L"dwmapi.dll");
+	if (dwm == NULL)
+		return;
+	fn = (DwmExtendFrameIntoClientArea_t) GetProcAddress(dwm, "DwmExtendFrameIntoClientArea");
+	if (fn != NULL) {
+		margins[0] = 0;
+		margins[1] = 0;
+		margins[2] = 0;
+		margins[3] = shadow ? 1 : 0;	// a 1px frame extension restores the borderless drop shadow
+		fn(w->hwnd, margins);
+	}
+	FreeLibrary(dwm);
+}
+
 // see http://blogs.msdn.com/b/oldnewthing/archive/2003/09/11/54885.aspx and http://blogs.msdn.com/b/oldnewthing/archive/2003/09/13/54917.aspx
 // TODO use clientSizeToWindowSize()
 static void setClientSize(uiWindow *w, int width, int height, BOOL hasMenubar, DWORD style, DWORD exstyle)
@@ -546,6 +673,7 @@ uiWindow *uiNewWindow(const char *title, int width, int height, int hasMenubar)
 	uiWindowsNewControl(uiWindow, w);
 
 	w->resizeable = TRUE;
+	w->shadow = TRUE;	// default ON (R5)
 	hasMenubarBOOL = FALSE;
 	if (hasMenubar)
 		hasMenubarBOOL = TRUE;
