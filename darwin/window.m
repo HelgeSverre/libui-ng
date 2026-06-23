@@ -19,16 +19,10 @@ struct uiWindow {
 	void (*onPositionChanged)(uiWindow*, void *);
 	void *onPositionChangedData;
 	BOOL suppressPositionChanged;
-<<<<<<< ours
 	BOOL fullscreen;
 	BOOL borderless;
 	BOOL resizeable;
-=======
-	int fullscreen;
-	int borderless;
-	int resizeable;
-	int keepAbove;
->>>>>>> theirs
+	BOOL keepAbove;
 	int focused;
 };
 
