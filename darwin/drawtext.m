@@ -76,6 +76,8 @@
 
 		rect.origin = CGPointZero;
 		rect.size = self->size;
+		if (p->Width >= 0)			// explicit width: align within requested width
+			rect.size.width = cgwidth;
 		self->path = CGPathCreateWithRect(rect, NULL);
 		self->frame = CTFramesetterCreateFrame(self->framesetter,
 			range,
