@@ -571,11 +571,44 @@ void uiDrawText(uiDrawContext *c, uiDrawTextLayout *tl, double x, double y)
 	textRenderer *renderer;
 	HRESULT hr;
 
-	/*
+	// fill background-color ranges first, so they sit behind the glyphs
 	for (auto p : *(tl->backgroundParams)) {
-		// TODO
+		DWRITE_HIT_TEST_METRICS *metrics;
+		UINT32 count;
+		ID2D1SolidColorBrush *bg;
+		UINT32 i;
+
+		// first call to size the array; this returns E_NOT_SUFFICIENT_BUFFER, which we ignore
+		count = 0;
+		tl->layout->HitTestTextRange(
+			(UINT32) (p->start), (UINT32) (p->end - p->start),
+			(FLOAT) x, (FLOAT) y,
+			NULL, 0, &count);
+		if (count == 0)
+			continue;
+		metrics = new DWRITE_HIT_TEST_METRICS[count];
+		hr = tl->layout->HitTestTextRange(
+			(UINT32) (p->start), (UINT32) (p->end - p->start),
+			(FLOAT) x, (FLOAT) y,
+			metrics, count, &count);
+		if (hr != S_OK) {
+			delete[] metrics;
+			logHRESULT(L"error hit-testing background range", hr);
+			continue;
+		}
+		bg = mustMakeSolidBrush(c->rt, p->r, p->g, p->b, p->a);
+		for (i = 0; i < count; i++) {
+			D2D1_RECT_F rect;
+
+			rect.left = metrics[i].left;
+			rect.top = metrics[i].top;
+			rect.right = metrics[i].left + metrics[i].width;
+			rect.bottom = metrics[i].top + metrics[i].height;
+			c->rt->FillRectangle(&rect, bg);
+		}
+		bg->Release();
+		delete[] metrics;
 	}
-	*/
 
 	// TODO document that fully opaque black is the default text color; figure out whether this is upheld in various scenarios on other platforms
 	// TODO figure out if this needs to be cleaned out
