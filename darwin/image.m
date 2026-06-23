@@ -37,7 +37,7 @@ void uiImageAppend(uiImage *i, void *pixels, int pixelWidth, int pixelHeight, in
 		hasAlpha:YES
 		isPlanar:NO
 		colorSpaceName:NSCalibratedRGBColorSpace
-		bitmapFormat:0
+		bitmapFormat:NSAlphaNonpremultipliedBitmapFormat
 		bytesPerRow:0
 		bitsPerPixel:32];
 
