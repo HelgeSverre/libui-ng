@@ -142,22 +142,18 @@ static void drawArc(uiDrawPath *p, struct arc *a, void (*startFunction)(uiDrawPa
 	as.size.width = a->radius;
 	as.size.height = a->radius;
 	as.rotationAngle = 0;		// as above, not relevant for circles
-	if (a->negative)
+	// the visual rotation direction depends on BOTH the negative flag and the SIGN of the sweep value
+	// the render target is plain Y-down (no Y flip), so increasing parameter angle = visually clockwise
+	// a negative sweep reverses that direction, as does the negative flag, so XOR them together
+	if (((a->negative != 0) ^ (a->sweep < 0)) != 0)
 		as.sweepDirection = D2D1_SWEEP_DIRECTION_COUNTER_CLOCKWISE;
 	else
 		as.sweepDirection = D2D1_SWEEP_DIRECTION_CLOCKWISE;
-	// TODO explain the outer if
-	if (!a->negative)
-		if (a->sweep > uiPi)
-			as.arcSize = D2D1_ARC_SIZE_LARGE;
-		else
-			as.arcSize = D2D1_ARC_SIZE_SMALL;
+	// arcSize is about how much of the ellipse the arc covers, so use the MAGNITUDE of the sweep, not the signed value
+	if (fabs(a->sweep) > uiPi)
+		as.arcSize = D2D1_ARC_SIZE_LARGE;
 	else
-		// TODO especially this part
-		if (a->sweep > uiPi)
-			as.arcSize = D2D1_ARC_SIZE_SMALL;
-		else
-			as.arcSize = D2D1_ARC_SIZE_LARGE;
+		as.arcSize = D2D1_ARC_SIZE_SMALL;
 	p->sink->AddArc(&as);
 }
 
