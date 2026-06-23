@@ -12,6 +12,7 @@
 
 	uiSpinbox *spinbox;
 }
+@property (getter=isEnabled) BOOL enabled;
 - (id)initWithFrame:(NSRect)r spinbox:(uiSpinbox *)sb;
 // see https://github.com/andlabs/ui/issues/82
 - (NSInteger)libui_value;
@@ -163,6 +164,27 @@ static CGFloat stepperYDelta(void)
 {
 	[self libui_setValue:[self->tf integerValue]];
 	(*(self->spinbox->onChanged))(self->spinbox, self->spinbox->onChangedData);
+}
+
+- (BOOL)isEnabled
+{
+	return [self->tf isEnabled] && [self->stepper isEnabled];
+}
+
+- (void)setEnabled:(BOOL)e
+{
+	[self->tf setEnabled:e];
+	[self->stepper setEnabled:e];
+}
+
+- (NSView *)viewForFirstBaselineLayout
+{
+	return self->tf;
+}
+
+- (NSView *)viewForLastBaselineLayout
+{
+	return self->tf;
 }
 
 @end
