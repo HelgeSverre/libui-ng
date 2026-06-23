@@ -120,6 +120,12 @@ static void uiEntryDestroy(uiControl *c)
 
 char *uiEntryText(uiEntry *e)
 {
+	NSWindow *w = [e->textfield window];
+
+	// commit any live field-editor text into the cell before reading;
+	// endEditingFor: is a no-op when the field is not being edited
+	if (w != nil)
+		[w endEditingFor:e->textfield];
 	return uiDarwinNSStringToText([e->textfield stringValue]);
 }
 
