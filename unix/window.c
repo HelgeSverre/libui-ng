@@ -39,6 +39,12 @@ struct uiWindow {
 	gint cachedPosY;
 	gint cachedWidth;
 	gint cachedHeight;
+
+	// saved child expand/align props (#207), restored on detach
+	gboolean savedChildHexpand;
+	GtkAlign savedChildHalign;
+	gboolean savedChildVexpand;
+	GtkAlign savedChildValign;
 };
 
 static gboolean onClosing(GtkWidget *win, GdkEvent *e, gpointer data)
@@ -65,9 +71,6 @@ static void onSizeAllocate(GtkWidget *widget, GdkRectangle *allocation, gpointer
 		if (!w->changingSize)
 			(*(w->onContentSizeChanged))(w, w->onContentSizeChangedData);
 	}
-
-	if (w->changingSize)
-		w->changingSize = FALSE;
 }
 
 static gboolean onGetFocus(GtkWidget *win, GdkEvent *e, gpointer data)
@@ -285,17 +288,35 @@ void uiWindowSetBorderless(uiWindow *w, int borderless)
 	gtk_window_set_decorated(w->window, borderless == 0);
 }
 
-// TODO save and restore expands and aligns
 void uiWindowSetChild(uiWindow *w, uiControl *child)
 {
 	if (w->child != NULL) {
+		GtkWidget *cw = GTK_WIDGET(uiControlHandle(w->child));
+
+		// restore the child's original expand/align props before detaching (#207)
+		gtk_widget_set_hexpand(cw, w->savedChildHexpand);
+		gtk_widget_set_halign(cw, w->savedChildHalign);
+		gtk_widget_set_vexpand(cw, w->savedChildVexpand);
+		gtk_widget_set_valign(cw, w->savedChildValign);
 		uiControlSetParent(w->child, NULL);
 		uiUnixControlSetContainer(uiUnixControl(w->child), w->childHolderContainer, TRUE);
 	}
 	w->child = child;
 	if (w->child != NULL) {
+		GtkWidget *cw = GTK_WIDGET(uiControlHandle(w->child));
+
 		uiControlSetParent(w->child, uiControl(w));
 		uiUnixControlSetContainer(uiUnixControl(w->child), w->childHolderContainer, FALSE);
+		// make the child fill the window (#207)
+		// save the original props so they can be restored if the child is later detached
+		w->savedChildHexpand = gtk_widget_get_hexpand(cw);
+		w->savedChildHalign = gtk_widget_get_halign(cw);
+		w->savedChildVexpand = gtk_widget_get_vexpand(cw);
+		w->savedChildValign = gtk_widget_get_valign(cw);
+		gtk_widget_set_hexpand(cw, TRUE);
+		gtk_widget_set_halign(cw, GTK_ALIGN_FILL);
+		gtk_widget_set_vexpand(cw, TRUE);
+		gtk_widget_set_valign(cw, GTK_ALIGN_FILL);
 	}
 }
 
