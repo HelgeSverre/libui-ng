@@ -22,6 +22,7 @@ char *commonItemDialog(HWND parent, REFCLSID clsid, REFIID iid, FILEOPENDIALOGOP
 	FILEOPENDIALOGOPTIONS opts;
 	IShellItem *result = NULL;
 	WCHAR *wname = NULL;
+	WCHAR *longname = NULL;
 	char *name = NULL;
 	HRESULT hr;
 
@@ -64,9 +65,38 @@ char *commonItemDialog(HWND parent, REFCLSID clsid, REFIID iid, FILEOPENDIALOGOP
 		logHRESULT(L"error getting filename", hr);
 		goto out;
 	}
-	name = toUTF8(wname);
+	{
+		WCHAR *src = wname;
+		DWORD longlen;
+
+		// GetDisplayName() can return 8.3 short names (PROGRA~1) and a
+		// \\?\ prefix for paths longer than MAX_PATH. Expand short names
+		// to their long form (this also works past MAX_PATH when the
+		// input carries the \\?\ prefix); on failure fall back to wname
+		// so a path is still returned.
+		longlen = GetLongPathNameW(wname, NULL, 0);
+		if (longlen != 0) {
+			longname = (WCHAR *) uiprivAlloc(longlen * sizeof (WCHAR), "WCHAR[]");
+			if (GetLongPathNameW(wname, longname, longlen) != 0)
+				src = longname;
+		}
+
+		// strip the long-path prefix before converting
+		if (wcsncmp(src, L"\\\\?\\UNC\\", 8) == 0) {
+			// \\?\UNC\server\share -> \\server\share
+			src += 8;
+			src -= 2;
+			src[0] = L'\\';
+			src[1] = L'\\';
+		} else if (wcsncmp(src, L"\\\\?\\", 4) == 0)
+			src += 4;
+
+		name = toUTF8(src);
+	}
 
 out:
+	if (longname != NULL)
+		uiprivFree(longname);
 	if (wname != NULL)
 		CoTaskMemFree(wname);
 	if (result != NULL)
