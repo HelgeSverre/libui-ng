@@ -534,6 +534,25 @@ _UI_EXTERN int uiWindowResizeable(uiWindow *w);
 _UI_EXTERN void uiWindowSetResizeable(uiWindow *w, int resizeable);
 
 /**
+ * Returns whether or not the window is kept in front of other windows.
+ *
+ * @param w uiWindow instance.
+ * @returns `TRUE` if window is kept in front, `FALSE` otherwise. [Default: `FALSE`]
+ * @memberof uiWindow
+ */
+_UI_EXTERN int uiWindowKeepAbove(const uiWindow *w);
+
+/**
+ * Sets whether or not the window is kept in front of other windows.
+ *
+ * @param w uiWindow instance.
+ * @param keepAbove `TRUE` to keep window in front of others, `FALSE` otherwise.
+ * @note This method is merely a hint and may be ignored by the system.
+ * @memberof uiWindow
+ */
+_UI_EXTERN void uiWindowSetKeepAbove(uiWindow *w, int keepAbove);
+
+/**
  * Creates a new uiWindow.
  *
  * @param title Window title text.\n
@@ -838,6 +857,29 @@ _UI_EXTERN int uiEntryReadOnly(uiEntry *e);
  * @memberof uiEntry
  */
 _UI_EXTERN void uiEntrySetReadOnly(uiEntry *e, int readonly);
+
+/**
+ * Returns the entry's placeholder.
+ *
+ * @param e uiEntry instance.
+ * @returns The placeholder text of the entry.\n
+ *          A `NUL` terminated UTF-8 string.\n
+ *          Caller is responsible for freeing the data with `uiFreeText()`.
+ * @memberof uiEntry
+ */
+_UI_EXTERN char *uiEntryPlaceholder(uiEntry *e);
+
+/**
+ * Sets text to be displayed in the entry when it is empty.
+ *
+ * @param e uiEntry instance.
+ * @param text Placeholder text.\n
+ *             A valid, `NUL` terminated UTF-8 string.\n
+ *             Data is copied internally. Ownership is not transferred.
+ * @warning Read only entries do not display the placeholder text on Windows.
+ * @memberof uiEntry
+ */
+_UI_EXTERN void uiEntrySetPlaceholder(uiEntry *e, const char *text);
 
 /**
  * Creates a new entry.
@@ -1547,6 +1589,28 @@ _UI_EXTERN void uiEditableComboboxSetText(uiEditableCombobox *c, const char *tex
  */
 _UI_EXTERN void uiEditableComboboxOnChanged(uiEditableCombobox *c,
 	void (*f)(uiEditableCombobox *sender, void *senderData), void *data);
+
+/**
+ * Returns the editable combo box's placeholder.
+ *
+ * @param c uiEditableCombobox instance.
+ * @returns The placeholder text of the combo box.\n
+ *          A `NUL` terminated UTF-8 string.\n
+ *          Caller is responsible for freeing the data with `uiFreeText()`.
+ * @memberof uiEditableCombobox
+ */
+_UI_EXTERN char *uiEditableComboboxPlaceholder(uiEditableCombobox *c);
+
+/**
+ * Sets text to be displayed in the editable combo box when it is empty.
+ *
+ * @param c uiEditableCombobox instance.
+ * @param text Placeholder text.\n
+ *             A valid, `NUL` terminated UTF-8 string.\n
+ *             Data is copied internally. Ownership is not transferred.
+ * @memberof uiEditableCombobox
+ */
+_UI_EXTERN void uiEditableComboboxSetPlaceholder(uiEditableCombobox *c, const char *text);
 
 /**
  * Creates a new editable combo box.
