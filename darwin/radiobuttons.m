@@ -172,6 +172,9 @@ void uiRadioButtonsSetSelected(uiRadioButtons *r, int n)
 	NSButton *b;
 	NSInteger state;
 
+	if (n < -1 || n >= (int) [r->buttons count])
+		// out of range; ignore
+		return;
 	r->selected = n;
 
 	state = NSOnState;

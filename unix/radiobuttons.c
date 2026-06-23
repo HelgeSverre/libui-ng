@@ -77,7 +77,17 @@ int uiRadioButtonsSelected(uiRadioButtons *r)
 
 void uiRadioButtonsSetSelected(uiRadioButtons *r, int n)
 {
-	GtkToggleButton *tb = GTK_TOGGLE_BUTTON(g_ptr_array_index(r->buttons, n + 1));
+	GtkToggleButton *tb;
+
+	// index 0 is the hidden grouping button; real buttons are 1..len-1
+	if (n < -1 || n >= (int) (r->buttons->len - 1))
+		// out of range; ignore
+		return;
+	if (n == -1)
+		// select the hidden button to clear the visible selection
+		tb = GTK_TOGGLE_BUTTON(g_ptr_array_index(r->buttons, 0));
+	else
+		tb = GTK_TOGGLE_BUTTON(g_ptr_array_index(r->buttons, n + 1));
 	// this is easier than remembering all the signals
 	r->changing = TRUE;
 	gtk_toggle_button_set_active(tb, TRUE);

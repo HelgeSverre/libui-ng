@@ -166,6 +166,9 @@ void uiRadioButtonsSetSelected(uiRadioButtons *r, int n)
 {
 	int m;
 
+	if (n < -1 || n >= (int) r->hwnds->size())
+		// out of range; ignore
+		return;
 	m = uiRadioButtonsSelected(r);
 	if (m != -1)
 		SendMessage((*(r->hwnds))[m], BM_SETCHECK, BST_UNCHECKED, 0);
