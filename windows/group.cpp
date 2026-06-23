@@ -51,6 +51,9 @@ static void groupRelayout(uiGroup *g)
 	r.right -= mx;
 	r.bottom -= mbottom;
 	uiWindowsEnsureMoveWindowDuringResize((HWND) uiControlHandle(g->child), r.left, r.top, r.right - r.left, r.bottom - r.top);
+	// issue #323: the groupbox frame and its transparent container suppress erase, so a relocated/hidden child leaves stale pixels behind
+	// force a full redraw of the group's client area; RDW_ALLCHILDREN is required so the transparent container and its children repaint over the vacated region
+	RedrawWindow(g->hwnd, NULL, NULL, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
 }
 
 static void uiGroupDestroy(uiControl *c)
