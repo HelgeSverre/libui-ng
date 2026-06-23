@@ -37,6 +37,8 @@
 	NSMutableArray *inBetweens;
 
 	NSMutableArray *emptyCellViews;
+
+	BOOL establishing;
 }
 - (id)initWithG:(uiGrid *)gg;
 - (void)onDestroy;
@@ -176,6 +178,8 @@ struct uiGrid {
 		self->inBetweens = [NSMutableArray new];
 
 		self->emptyCellViews = [NSMutableArray new];
+
+		self->establishing = NO;
 	}
 	return self;
 }
@@ -251,9 +255,20 @@ struct uiGrid {
 	BOOL doit;
 	BOOL onlyEmptyAndSpanning;
 
-	[self removeOurConstraints];
-	if ([self->children count] == 0)
+	// uiDarwinControlSetHuggingPriority() below can, for container children
+	// (uiTab/uiBox/uiGroup/uiForm), notify edge-hugging changes back up to
+	// this grid, which re-enters establishOurConstraints and recurses without
+	// bound (issue #444). Guard against re-entry: the in-flight outer pass is
+	// already rebuilding all constraints, so the re-entrant call is a no-op.
+	if (self->establishing)
 		return;
+	self->establishing = YES;
+
+	[self removeOurConstraints];
+	if ([self->children count] == 0) {
+		self->establishing = NO;
+		return;
+	}
 	padding = [self paddingAmount];
 
 	// first, figure out the minimum and maximum row and column numbers
@@ -280,8 +295,10 @@ struct uiGrid {
 		if (ymax < (gc.top + gc.yspan))
 			ymax = gc.top + gc.yspan;
 	}
-	if (first != NO)		// the entire grid is hidden; do nothing
+	if (first != NO) {		// the entire grid is hidden; do nothing
+		self->establishing = NO;
 		return;
+	}
 	xcount = xmax - xmin;
 	ycount = ymax - ymin;
 
@@ -532,6 +549,8 @@ struct uiGrid {
 	uiprivFree(gg);
 	uiprivFree(gv);
 	uiprivFree(gspan);
+
+	self->establishing = NO;
 }
 
 - (void)append:(gridChild *)gc
