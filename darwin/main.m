@@ -142,7 +142,9 @@ uiInitOptions uiprivOptions;
 const char *uiInit(uiInitOptions *o)
 {
 	@autoreleasepool {
-		uiprivOptions = *o;
+		if (o) {
+			uiprivOptions = *o;
+		}
 		app = [[uiprivApplicationClass sharedApplication] retain];
 		delegate = [uiprivAppDelegate new];
 		[uiprivNSApp() setDelegate:delegate];
