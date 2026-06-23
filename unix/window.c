@@ -45,6 +45,13 @@ struct uiWindow {
 	GtkAlign savedChildHalign;
 	gboolean savedChildVexpand;
 	GtkAlign savedChildValign;
+
+	// custom-chrome support
+	uiControl *titlebar;
+	gulong titlebarHandler;
+	uiWindowCornerStyle cornerStyle;
+	gboolean shadow;
+	GtkCssProvider *chromeCSS;
 };
 
 static gboolean onClosing(GtkWidget *win, GdkEvent *e, gpointer data)
@@ -363,12 +370,98 @@ void uiWindowSetKeepAbove(uiWindow *w, int keepAbove)
 	gtk_window_set_keep_above(w->window, keepAbove);
 }
 
+// custom-chrome support. Corners/shadow are applied via a window CSS provider
+// (best-effort; the compositor governs whether they render — e.g. Wayland may
+// ignore them). The titlebar drag uses gtk_window_begin_move_drag. See ui.h.
+static gint cornerRadiusForStyle(uiWindowCornerStyle style)
+{
+	switch (style) {
+	case uiWindowCornerStyleRounded:
+		return 10;
+	case uiWindowCornerStyleRoundedSmall:
+		return 6;
+	default:
+		return 0;
+	}
+}
+
+static gboolean onTitlebarPress(GtkWidget *handle, GdkEvent *e, gpointer data)
+{
+	uiWindow *w = uiWindow(data);
+	GdkEventButton *be = (GdkEventButton *) e;
+
+	if (be->type == GDK_BUTTON_PRESS && be->button == 1) {
+		gtk_window_begin_move_drag(w->window, be->button,
+			(gint) be->x_root, (gint) be->y_root, be->time);
+		return TRUE;
+	}
+	return FALSE;
+}
+
+void uiWindowSetTitlebar(uiWindow *w, uiControl *titlebar)
+{
+	if (w->titlebar != NULL && w->titlebarHandler != 0) {
+		GtkWidget *old = GTK_WIDGET(uiControlHandle(w->titlebar));
+		g_signal_handler_disconnect(old, w->titlebarHandler);
+		w->titlebarHandler = 0;
+	}
+	w->titlebar = titlebar;
+	if (titlebar != NULL) {
+		GtkWidget *h = GTK_WIDGET(uiControlHandle(titlebar));
+		gtk_widget_add_events(h, GDK_BUTTON_PRESS_MASK);
+		w->titlebarHandler = g_signal_connect(h, "button-press-event",
+			G_CALLBACK(onTitlebarPress), w);
+	}
+}
+
+static void applyChromeCSS(uiWindow *w)
+{
+	char css[256];
+	gint radius = cornerRadiusForStyle(w->cornerStyle);
+
+	g_snprintf(css, sizeof (css),
+		"window { border-radius: %dpx; %s }",
+		radius,
+		w->shadow ? "box-shadow: 0 2px 12px rgba(0,0,0,0.45);" : "");
+	if (w->chromeCSS == NULL) {
+		w->chromeCSS = gtk_css_provider_new();
+		gtk_style_context_add_provider(
+			gtk_widget_get_style_context(GTK_WIDGET(w->window)),
+			GTK_STYLE_PROVIDER(w->chromeCSS),
+			GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+	}
+	gtk_css_provider_load_from_data(w->chromeCSS, css, -1, NULL);
+}
+
+uiWindowCornerStyle uiWindowGetCornerStyle(uiWindow *w)
+{
+	return w->cornerStyle;
+}
+
+void uiWindowSetCornerStyle(uiWindow *w, uiWindowCornerStyle style)
+{
+	w->cornerStyle = style;
+	applyChromeCSS(w);
+}
+
+int uiWindowShadow(uiWindow *w)
+{
+	return w->shadow;
+}
+
+void uiWindowSetShadow(uiWindow *w, int shadow)
+{
+	w->shadow = shadow ? TRUE : FALSE;
+	applyChromeCSS(w);
+}
+
 uiWindow *uiNewWindow(const char *title, int width, int height, int hasMenubar)
 {
 	uiWindow *w;
 
 	uiUnixNewControl(uiWindow, w);
 
+	w->shadow = TRUE;	// default ON (R5)
 	w->resizeable = TRUE;
 	w->widget = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 	w->container = GTK_CONTAINER(w->widget);
