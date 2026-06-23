@@ -23,6 +23,9 @@ struct uiWindow {
 	BOOL borderless;
 	BOOL resizeable;
 	BOOL keepAbove;
+	uiControl *titlebar;
+	uiWindowCornerStyle cornerStyle;
+	BOOL shadow;
 	int focused;
 };
 
@@ -447,6 +450,74 @@ void uiWindowSetKeepAbove(uiWindow *w, int keepAbove)
 	}
 }
 
+// custom-chrome (borderless) window support: titlebar drag handle, corner
+// rounding, and drop shadow. See uiWindowSetBorderless()/uiWindowSetResizeable()
+// for the rest of the chrome surface.
+
+void uiWindowSetTitlebar(uiWindow *w, uiControl *titlebar)
+{
+	w->titlebar = titlebar;
+	// On macOS we let the window be dragged by its background; AppKit excludes
+	// interactive controls automatically, so a designated handle's empty areas
+	// move the window while its buttons/entries still click. (Windows and GTK
+	// honor the specific handle control via hit-testing.)
+	[w->window setMovableByWindowBackground:(titlebar != NULL)];
+}
+
+static CGFloat cornerRadiusForStyle(uiWindowCornerStyle style)
+{
+	switch (style) {
+	case uiWindowCornerStyleRounded:
+		return 10.0;
+	case uiWindowCornerStyleRoundedSmall:
+		return 6.0;
+	case uiWindowCornerStyleNone:
+	default:
+		return 0.0;
+	}
+}
+
+uiWindowCornerStyle uiWindowGetCornerStyle(uiWindow *w)
+{
+	return w->cornerStyle;
+}
+
+void uiWindowSetCornerStyle(uiWindow *w, uiWindowCornerStyle style)
+{
+	NSView *cv;
+	CGFloat radius;
+
+	w->cornerStyle = style;
+	radius = cornerRadiusForStyle(style);
+	cv = [w->window contentView];
+	if (radius > 0.0) {
+		// Rounding the window requires a non-opaque window with a clear
+		// background so the rounded layer corners are not painted over.
+		[w->window setOpaque:NO];
+		[w->window setBackgroundColor:[NSColor clearColor]];
+		[cv setWantsLayer:YES];
+		[[cv layer] setCornerRadius:radius];
+		[[cv layer] setMasksToBounds:YES];
+	} else {
+		[[cv layer] setCornerRadius:0.0];
+		[w->window setOpaque:YES];
+		[w->window setBackgroundColor:[NSColor windowBackgroundColor]];
+	}
+	[w->window invalidateShadow];
+}
+
+int uiWindowShadow(uiWindow *w)
+{
+	return w->shadow;
+}
+
+void uiWindowSetShadow(uiWindow *w, int shadow)
+{
+	w->shadow = shadow ? YES : NO;
+	[w->window setHasShadow:(w->shadow ? YES : NO)];
+	[w->window invalidateShadow];
+}
+
 static int defaultOnClosing(uiWindow *w, void *data)
 {
 	return 0;
@@ -474,6 +545,7 @@ uiWindow *uiNewWindow(const char *title, int width, int height, int hasMenubar)
 		height:(CGFloat)height
 		uiWindow:w];
 	uiWindowSetTitle(w, title);
+	w->shadow = YES;	// windows have a shadow by default; track it (default ON)
 	uiWindowSetResizeable(w, 1);
 
 	uiWindowOnClosing(w, defaultOnClosing, NULL);

@@ -553,6 +553,72 @@ _UI_EXTERN int uiWindowKeepAbove(const uiWindow *w);
 _UI_EXTERN void uiWindowSetKeepAbove(uiWindow *w, int keepAbove);
 
 /**
+ * Window corner styles for custom-chrome (borderless) windows.
+ *
+ * @enum uiWindowCornerStyle
+ */
+_UI_ENUM(uiWindowCornerStyle) {
+	uiWindowCornerStyleNone,        //!< Square corners.
+	uiWindowCornerStyleRounded,     //!< Rounded corners (system default radius).
+	uiWindowCornerStyleRoundedSmall //!< Slightly rounded corners.
+};
+
+/**
+ * Designates a child control as the window's draggable titlebar.
+ *
+ * Intended for borderless (custom-chrome) windows: pressing and dragging the
+ * given control moves the window, while interactive descendants (buttons,
+ * entries, …) keep working. Pass `NULL` to clear.
+ *
+ * @param w uiWindow instance.
+ * @param titlebar A child control to use as the drag handle, or `NULL`.
+ * @memberof uiWindow
+ */
+_UI_EXTERN void uiWindowSetTitlebar(uiWindow *w, uiControl *titlebar);
+
+/**
+ * Returns the window's corner style.
+ *
+ * @param w uiWindow instance.
+ * @returns the current uiWindowCornerStyle. [Default: `uiWindowCornerStyleNone`]
+ * @memberof uiWindow
+ */
+_UI_EXTERN uiWindowCornerStyle uiWindowGetCornerStyle(uiWindow *w);
+
+/**
+ * Sets the window's corner style.
+ *
+ * Most relevant for borderless windows. On Windows this maps to the DWM corner
+ * preference (square on Windows 10); on macOS/GTK it rounds the window.
+ *
+ * @param w uiWindow instance.
+ * @param style a uiWindowCornerStyle.
+ * @note Best-effort; may be ignored where the platform/compositor cannot honor it.
+ * @memberof uiWindow
+ */
+_UI_EXTERN void uiWindowSetCornerStyle(uiWindow *w, uiWindowCornerStyle style);
+
+/**
+ * Returns whether the window casts a drop shadow.
+ *
+ * @param w uiWindow instance.
+ * @returns `TRUE` if the window has a shadow. [Default: `TRUE`]
+ * @memberof uiWindow
+ */
+_UI_EXTERN int uiWindowShadow(uiWindow *w);
+
+/**
+ * Sets whether the window casts a drop shadow.
+ *
+ * Useful to restore the shadow a borderless window otherwise loses.
+ *
+ * @param w uiWindow instance.
+ * @param shadow `TRUE` to cast a shadow, `FALSE` otherwise.
+ * @memberof uiWindow
+ */
+_UI_EXTERN void uiWindowSetShadow(uiWindow *w, int shadow);
+
+/**
  * Creates a new uiWindow.
  *
  * @param title Window title text.\n
