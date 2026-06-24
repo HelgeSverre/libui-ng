@@ -2184,6 +2184,7 @@ typedef struct uiArea uiArea;
 typedef struct uiAreaHandler uiAreaHandler;
 typedef struct uiAreaDrawParams uiAreaDrawParams;
 typedef struct uiAreaMouseEvent uiAreaMouseEvent;
+typedef struct uiAreaMouseScrollEvent uiAreaMouseScrollEvent;
 typedef struct uiAreaKeyEvent uiAreaKeyEvent;
 
 typedef struct uiDrawContext uiDrawContext;
@@ -2197,6 +2198,10 @@ struct uiAreaHandler {
 	void (*MouseCrossed)(uiAreaHandler *, uiArea *, int left);
 	void (*DragBroken)(uiAreaHandler *, uiArea *);
 	int (*KeyEvent)(uiAreaHandler *, uiArea *, uiAreaKeyEvent *);
+	// Optional: scroll-wheel / trackpad scrolling over the area. Appended to the
+	// end of the struct so older handlers that leave it NULL keep working; every
+	// backend null-checks it before calling.
+	void (*MouseScrolled)(uiAreaHandler *, uiArea *, uiAreaMouseScrollEvent *);
 };
 
 // TODO RTL layouts?
@@ -2977,6 +2982,24 @@ struct uiAreaMouseEvent {
 	uiModifiers Modifiers;
 
 	uint64_t Held1To64;
+};
+
+struct uiAreaMouseScrollEvent {
+	// Pointer position, in the same coordinate space as uiAreaMouseEvent.
+	double X;
+	double Y;
+
+	double AreaWidth;
+	double AreaHeight;
+
+	// Scroll amount in wheel "steps": one mouse-wheel notch is +/-1.0, while
+	// trackpads/precise devices report fractional steps. Positive DeltaY scrolls
+	// the content towards its end (wheel rolled down); positive DeltaX scrolls
+	// towards the content's right edge.
+	double DeltaX;
+	double DeltaY;
+
+	uiModifiers Modifiers;
 };
 
 _UI_ENUM(uiExtKey) {

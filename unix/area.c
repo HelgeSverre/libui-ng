@@ -61,6 +61,7 @@ static void areaWidget_init(areaWidget *aw)
 		GDK_BUTTON_MOTION_MASK |
 		GDK_BUTTON_PRESS_MASK |
 		GDK_BUTTON_RELEASE_MASK |
+		GDK_SCROLL_MASK |
 		GDK_KEY_PRESS_MASK |
 		GDK_KEY_RELEASE_MASK |
 		GDK_ENTER_NOTIFY_MASK |
@@ -304,6 +305,41 @@ static gboolean areaWidget_motion_notify_event(GtkWidget *w, GdkEventMotion *e)
 
 // we want switching away from the control to reset the double-click counter, like with WM_ACTIVATE on Windows
 // according to tristan in irc.gimp.net/#gtk+, doing this on both enter-notify-event and leave-notify-event is correct (and it seems to be true in my own tests; plus the events DO get sent when switching programs with the keyboard (just pointing that out))
+static gboolean areaWidget_scroll_event(GtkWidget *w, GdkEventScroll *e)
+{
+	areaWidget *aw = areaWidget(w);
+	uiArea *a = aw->a;
+	uiAreaMouseScrollEvent se;
+	gdouble dx = 0, dy = 0;
+
+	if (a->ah->MouseScrolled == NULL)
+		return GDK_EVENT_PROPAGATE;
+
+	switch (e->direction) {
+	case GDK_SCROLL_UP:    dy = -1; break;
+	case GDK_SCROLL_DOWN:  dy =  1; break;
+	case GDK_SCROLL_LEFT:  dx = -1; break;
+	case GDK_SCROLL_RIGHT: dx =  1; break;
+	case GDK_SCROLL_SMOOTH:
+		// GTK already uses positive-down / positive-right, matching our spec.
+		gdk_event_get_scroll_deltas((GdkEvent *) e, &dx, &dy);
+		break;
+	}
+
+	se.DeltaX = dx;
+	se.DeltaY = dy;
+
+	// e->x / e->y are already in drawing-space coordinates (see finishMouseEvent).
+	se.X = e->x;
+	se.Y = e->y;
+	loadAreaSize(a, &(se.AreaWidth), &(se.AreaHeight));
+
+	se.Modifiers = toModifiers(translateModifiers(e->state, e->window));
+
+	(*(a->ah->MouseScrolled))(a->ah, a, &se);
+	return GDK_EVENT_STOP;
+}
+
 static gboolean onCrossing(areaWidget *aw, int left)
 {
 	uiArea *a = aw->a;
@@ -480,6 +516,7 @@ static void areaWidget_class_init(areaWidgetClass *class)
 	GTK_WIDGET_CLASS(class)->button_press_event = areaWidget_button_press_event;
 	GTK_WIDGET_CLASS(class)->button_release_event = areaWidget_button_release_event;
 	GTK_WIDGET_CLASS(class)->motion_notify_event = areaWidget_motion_notify_event;
+	GTK_WIDGET_CLASS(class)->scroll_event = areaWidget_scroll_event;
 	GTK_WIDGET_CLASS(class)->enter_notify_event = areaWidget_enter_notify_event;
 	GTK_WIDGET_CLASS(class)->leave_notify_event = areaWidget_leave_notify_event;
 	GTK_WIDGET_CLASS(class)->key_press_event = areaWidget_key_press_event;

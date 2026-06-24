@@ -154,6 +154,45 @@ static void areaMouseEvent(uiArea *a, int down, int  up, WPARAM wParam, LPARAM l
 	(*(a->ah->MouseEvent))(a->ah, a, &me);
 }
 
+static void areaMouseScrollEvent(uiArea *a, WPARAM wParam, LPARAM lParam, BOOL horizontal)
+{
+	uiAreaMouseScrollEvent se;
+	POINT pt;
+	double xpix, ypix;
+	double delta;
+
+	if (a->ah->MouseScrolled == NULL)
+		return;
+
+	// Unlike the button messages, WM_MOUSEWHEEL coordinates are in screen space.
+	pt.x = GET_X_LPARAM(lParam);
+	pt.y = GET_Y_LPARAM(lParam);
+	ScreenToClient(a->hwnd, &pt);
+	xpix = (double) pt.x;
+	ypix = (double) pt.y;
+	pixelsToDIP(a, &xpix, &ypix);
+	se.X = xpix;
+	se.Y = ypix;
+	if (a->scrolling) {
+		se.X += a->hscrollpos;
+		se.Y += a->vscrollpos;
+	}
+
+	loadAreaSize(a, NULL, &(se.AreaWidth), &(se.AreaHeight));
+
+	delta = ((double) GET_WHEEL_DELTA_WPARAM(wParam)) / ((double) WHEEL_DELTA);
+	se.DeltaX = 0;
+	se.DeltaY = 0;
+	if (horizontal)
+		se.DeltaX = delta;	// positive = towards the right
+	else
+		se.DeltaY = -delta;	// positive = towards the content end (wheel down)
+
+	se.Modifiers = getModifiers();
+
+	(*(a->ah->MouseScrolled))(a->ah, a, &se);
+}
+
 // TODO genericize this so it can be called above
 static void onMouseEntered(uiArea *a)
 {
@@ -377,6 +416,14 @@ BOOL areaDoEvents(uiArea *a, UINT uMsg, WPARAM wParam, LPARAM lParam, LRESULT *l
 			0, GET_XBUTTON_WPARAM(wParam) + 3,
 			GET_KEYSTATE_WPARAM(wParam), lParam);
 		*lResult = TRUE;	// XBUTTON messages are different!
+		return TRUE;
+	case WM_MOUSEWHEEL:
+		areaMouseScrollEvent(a, wParam, lParam, FALSE);
+		*lResult = 0;
+		return TRUE;
+	case WM_MOUSEHWHEEL:
+		areaMouseScrollEvent(a, wParam, lParam, TRUE);
+		*lResult = 0;
 		return TRUE;
 	case WM_CAPTURECHANGED:
 		if (a->capturing) {

@@ -225,6 +225,44 @@ if (@available(macOS 10.12, *)) {
 	}
 }
 
+- (void)scrollWheel:(NSEvent *)e
+{
+	uiArea *a = self->libui_a;
+	uiAreaMouseScrollEvent se;
+	NSPoint point;
+
+	if (a->ah->MouseScrolled == NULL || !self->libui_enabled) {
+		[super scrollWheel:e];
+		return;
+	}
+
+	point = [self convertPoint:[e locationInWindow] fromView:nil];
+	se.X = point.x;
+	se.Y = point.y;
+
+	se.AreaWidth = 0;
+	se.AreaHeight = 0;
+	if (!a->scrolling) {
+		se.AreaWidth = [self frame].size.width;
+		se.AreaHeight = [self frame].size.height;
+	}
+
+	// Normalise to wheel "steps": NSEvent deltas are positive when scrolling
+	// up/left, so negate to make positive DeltaY scroll towards the content end.
+	// Precise (trackpad) deltas are in points; scale them down to ~steps.
+	if ([e hasPreciseScrollingDeltas]) {
+		se.DeltaX = -[e scrollingDeltaX] / 16.0;
+		se.DeltaY = -[e scrollingDeltaY] / 16.0;
+	} else {
+		se.DeltaX = -[e deltaX];
+		se.DeltaY = -[e deltaY];
+	}
+
+	se.Modifiers = [self parseModifiers:e];
+
+	(*(a->ah->MouseScrolled))(a->ah, a, &se);
+}
+
 #define mouseEvent(name) \
 	- (void)name:(NSEvent *)e \
 	{ \
