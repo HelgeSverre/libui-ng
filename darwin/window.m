@@ -31,6 +31,24 @@ struct uiWindow {
 
 static void updateStyleMask(uiWindow *w);
 
+// Depth-first search for the first uiArea (areaView) in a view tree. Used so a
+// borderless/custom-chrome window can take keyboard focus on its content area
+// without the user having to click it first. areaView is private to area.m, so
+// it is resolved by name to avoid a header dependency.
+static NSView *uiprivFirstAreaView(NSView *v)
+{
+	Class areaClass = NSClassFromString(@"areaView");
+
+	if (areaClass != nil && [v isKindOfClass:areaClass])
+		return v;
+	for (NSView *sub in [v subviews]) {
+		NSView *found = uiprivFirstAreaView(sub);
+		if (found != nil)
+			return found;
+	}
+	return nil;
+}
+
 @implementation uiprivNSWindow
 
 - (void)uiprivDoMove:(NSEvent *)initialEvent
@@ -85,6 +103,39 @@ static void updateStyleMask(uiWindow *w);
 
 	if (!w->suppressPositionChanged)
 		(*(w->onPositionChanged))(w, w->onPositionChangedData);
+}
+
+// A borderless NSWindow returns NO from canBecomeKeyWindow by default, so it can
+// never receive keyboard events (the area's key handler is never reached). Custom
+// chrome windows are borderless, so allow key/main status unconditionally — titled
+// windows already return YES, so this does not change their behaviour.
+- (BOOL)canBecomeKeyWindow
+{
+	return YES;
+}
+
+- (BOOL)canBecomeMainWindow
+{
+	return YES;
+}
+
+- (void)becomeKeyWindow
+{
+	[super becomeKeyWindow];
+
+	// For borderless/custom-chrome windows whose content is a single uiArea,
+	// focus that area when nothing else is focused yet, so typing works without
+	// an initial click. Scoped to borderless so ordinary windows are unaffected.
+	if (self->window != NULL && self->window->borderless) {
+		id fr = [self firstResponder];
+
+		if (fr == nil || fr == self) {
+			NSView *area = uiprivFirstAreaView([self contentView]);
+
+			if (area != nil)
+				[self makeFirstResponder:area];
+		}
+	}
 }
 
 - (void)windowDidEnterFullScreen:(NSNotification *)note
@@ -337,10 +388,17 @@ static void updateStyleMask(uiWindow *w)
 	if (w->resizeable)
 		mask |= NSResizableWindowMask;
 
-	if (w->borderless)
+	if (w->borderless) {
+		// A borderless window has no title bar, so reset to the borderless mask —
+		// but keep the resizable bit so custom-chrome windows can still be resized
+		// by dragging their edges (NSBorderlessWindowMask is 0, so this is just
+		// NSResizableWindowMask when resizeable).
 		mask = NSBorderlessWindowMask;
-	else
+		if (w->resizeable)
+			mask |= NSResizableWindowMask;
+	} else {
 		mask |= NSTitledWindowMask;
+	}
 
 	[w->window setStyleMask:mask];
 }
