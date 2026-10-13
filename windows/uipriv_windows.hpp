@@ -171,6 +171,9 @@ extern D2D1_SIZE_F realGetSize(ID2D1RenderTarget *rt);
 // draw.cpp
 extern ID2D1DCRenderTarget *makeHDCRenderTarget(HDC dc, RECT *r);
 
+// entryemoji.cpp
+extern void uiprivEntryEnableColorEmoji(HWND hwnd);
+
 // image.cpp
 extern IWICImagingFactory *uiprivWICFactory;
 extern HRESULT uiprivInitImage(void);

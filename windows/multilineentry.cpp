@@ -138,6 +138,7 @@ static uiMultilineEntry *finishMultilineEntry(DWORD style)
 
 	uiWindowsRegisterWM_COMMANDHandler(e->hwnd, onWM_COMMAND, uiControl(e));
 	uiMultilineEntryOnChanged(e, defaultOnChanged, NULL);
+	uiprivEntryEnableColorEmoji(e->hwnd);
 
 	return e;
 }
