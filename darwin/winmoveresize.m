@@ -52,7 +52,11 @@ void uiprivDoManualMove(NSWindow *w, NSEvent *initialEvent)
 
 	// 10.11 gives us a method to handle this for us
 	// use it if available; this lets us use the real OS dragging code, which means we can take advantage of OS features like Spaces
-	if (uiprivFUTURE_NSWindow_performWindowDragWithEvent(w, initialEvent))
+	// AppKit's system drag tracks the hardware button state. Accessibility tools
+	// can deliver a complete mouse event sequence without a hardware button held;
+	// use our event-driven tracker for those sequences instead.
+	if (([initialEvent type] != NSLeftMouseDown || ([NSEvent pressedMouseButtons] & 1) != 0) &&
+		uiprivFUTURE_NSWindow_performWindowDragWithEvent(w, initialEvent))
 		return;
 
 	mdp.w = w;

@@ -14,6 +14,7 @@ class entryEmojiRenderer : public IDWriteTextRenderer {
 	IDWriteFactory2 *factory;
 	TEXTMETRICW metrics;
 	UINT32 lineStart;
+	UINT32 visibleStart, visibleEnd;
 	DWORD selectionStart, selectionEnd;
 	D2D1_COLOR_F background;
 public:
@@ -22,6 +23,24 @@ public:
 		: refs(1), hwnd(h), dc(d), rt(target), factory(f), metrics(m), lineStart(start), background(bg)
 	{
 		SendMessageW(hwnd, EM_GETSEL, (WPARAM) &selectionStart, (LPARAM) &selectionEnd);
+		RECT rect;
+		SendMessageW(hwnd, EM_GETRECT, 0, (LPARAM) &rect);
+		LRESULT point = SendMessageW(hwnd, EM_POSFROMCHAR, start, 0);
+		int y = (SHORT) HIWORD(point) + metrics.tmHeight / 2;
+		if (y < rect.top) y = rect.top;
+		if (y >= rect.bottom) y = rect.bottom - 1;
+		UINT32 left = LOWORD(SendMessageW(hwnd, EM_CHARFROMPOS, 0, MAKELPARAM(rect.left, y)));
+		UINT32 right = LOWORD(SendMessageW(hwnd, EM_CHARFROMPOS, 0, MAKELPARAM(rect.right - 1, y)));
+		// EDIT reports character indices and coordinates in 16-bit words. Limit
+		// LTR painting to the hit-tested visible range before reading coordinates,
+		// so a distant glyph cannot wrap around into the viewport.
+		if ((GetWindowLongPtrW(hwnd, GWL_STYLE) & ES_MULTILINE) == 0) {
+			visibleStart = (UINT32) SendMessageW(hwnd, EM_GETFIRSTVISIBLELINE, 0, 0);
+			visibleEnd = visibleStart + ((right - (visibleStart & 0xFFFF)) & 0xFFFF) + 1;
+		} else {
+			visibleStart = start + ((left - (start & 0xFFFF)) & 0xFFFF);
+			visibleEnd = start + ((right - (start & 0xFFFF)) & 0xFFFF) + 1;
+		}
 	}
 	HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid, void **out)
 	{
@@ -75,6 +94,7 @@ public:
 			UINT32 lastGlyph = glyphEnds[firstGlyph];
 			UINT32 position = lineStart + description->textPosition + i;
 			UINT32 positionEnd = lineStart + description->textPosition + end;
+			if ((run->bidiLevel & 1) == 0 && (positionEnd <= visibleStart || position >= visibleEnd)) { i = end; continue; }
 			if (position < selectionEnd && positionEnd > selectionStart) { i = end; continue; }
 			if (firstGlyph >= lastGlyph) { i = end; continue; }
 			DWRITE_GLYPH_RUN cluster = *run;
