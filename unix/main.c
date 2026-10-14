@@ -3,6 +3,12 @@
 
 uiInitOptions uiprivOptions;
 
+struct timer {
+	int (*f)(void *);
+	void *data;
+	guint source;
+};
+
 static GHashTable *timers;
 
 const char *uiInit(uiInitOptions *o)
@@ -28,11 +34,11 @@ const char *uiInit(uiInitOptions *o)
 	return NULL;
 }
 
-struct timer;		// TODO get rid of forward declaration
-
 static void uninitTimer(gpointer key, gpointer value, gpointer data)
 {
-	uiprivFree((struct timer *) key);
+	struct timer *t = (struct timer *) key;
+	g_source_remove(t->source);
+	uiprivFree(t);
 }
 
 void uiUninit(void)
@@ -68,6 +74,7 @@ static gboolean stepsIteration(gboolean block)
 
 void uiMainSteps(void)
 {
+	stepsQuit = FALSE;
 	iteration = stepsIteration;
 }
 
@@ -125,11 +132,6 @@ void uiQueueMain(void (*f)(void *data), void *data)
 	gdk_threads_add_idle(doqueued, q);
 }
 
-struct timer {
-	int (*f)(void *);
-	void *data;
-};
-
 static gboolean doTimer(gpointer data)
 {
 	struct timer *t = (struct timer *) data;
@@ -149,6 +151,6 @@ void uiTimer(int milliseconds, int (*f)(void *data), void *data)
 	t = uiprivNew(struct timer);
 	t->f = f;
 	t->data = data;
-	g_timeout_add(milliseconds, doTimer, t);
+	t->source = g_timeout_add(milliseconds, doTimer, t);
 	g_hash_table_add(timers, t);
 }

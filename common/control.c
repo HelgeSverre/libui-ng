@@ -1,9 +1,20 @@
 // 26 may 2015
 #include "../ui.h"
 #include "uipriv.h"
+#if !defined(_WIN32) && !defined(__APPLE__)
+#include <gtk/gtk.h>
+#endif
 
 void uiControlDestroy(uiControl *c)
 {
+#if !defined(_WIN32) && !defined(__APPLE__)
+	// A never-parented GTK widget still owns its initial floating reference.
+	// Claim that reference before the backend's Destroy unrefs it. Previously
+	// GTK warned (or aborted with fatal warnings) when finalizing such roots.
+	GObject *widget = G_OBJECT(uiControlHandle(c));
+	if (g_object_is_floating(widget))
+		g_object_ref_sink(widget);
+#endif
 	(*(c->Destroy))(c);
 }
 
